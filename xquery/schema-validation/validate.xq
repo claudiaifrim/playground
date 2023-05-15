@@ -89,11 +89,6 @@ span.iedreg.pass { color: #fff; background-color: #5cb85c }
 span.iedreg.none { color: #fff; background-color: #999 }
 ul.iedreg.error-summary {margin: 0}
 
-div.feedbacktext {
-    //min-width: 500px;
-    //max-width: 500px;
-}
-
 ]]>
     </style>
 };
@@ -105,9 +100,22 @@ declare function functx:substring-before-last-match
 
     replace($arg, concat('^(.*)', $regex, '.*'), '$1')
 };
+declare function functx:is-node-in-sequence
+  ( $node as node()? ,
+    $seq as node()* )  as xs:boolean {
 
+   some $nodeInSeq in $seq satisfies $nodeInSeq is $node
+ } ;
+declare function functx:distinct-nodes
+  ( $nodes as node()* )  as node()* {
+
+    for $seq in (1 to count($nodes))
+    return $nodes[$seq][not(functx:is-node-in-sequence(
+                                .,$nodes[position() < $seq]))]
+ } ;
 
 declare function schemaValidate:validate($source_url as xs:string){
+    (: let $envelopeURL := functx:substring-before-last-match($source_url, '/') || '/xml' :)
     let $envelopeURL := $source_url
     let $envelopeDoc := fn:doc($envelopeURL)
     let $files := $envelopeDoc//*
@@ -124,9 +132,16 @@ declare function schemaValidate:validate($source_url as xs:string){
 
             let $file_source_url := fn:concat('source_url=',$fileUrl)
             let $fileX := fn:replace($source_url,'source_url=.*',$file_source_url)
+            
+            (:
+            let $fileX := fn:replace($fileUrl,'http://', 'https://')
+            :)
 
-            let $fileDoc := fn:doc($fileX)
             let $validationResult := validate:xsd-report($fileX)
+            let $resultDistinct := 
+                for $message in distinct-values($validationResult/*)
+                    return <message>{$message}</message>
+
             let $validStatus := $validationResult//*:status/data()
             let $validMessage := $validationResult//*:message/data()
             let $errorType := if($validStatus = 'valid')
@@ -135,7 +150,7 @@ declare function schemaValidate:validate($source_url as xs:string){
 
             return 
                 <div class="iedreg row">
-                    <div class="iedreg col inner {$errorType}">{$validationResult}</div>
+                    <div class="iedreg col inner {$errorType}">{$resultDistinct}</div>
                     <div class="iedreg col inner">{$fileName}</div>
                     <div class="iedreg col inner">{$fileUrl}</div>
                 </div>
@@ -146,7 +161,7 @@ declare function schemaValidate:validate($source_url as xs:string){
             if ($all = "failed") then "failed"
             else if ($all = "blocker") then "blocker"
             else if ($all = "pass") then "ok"
-            else ""
+            else "ok"
 
     let $feedbackMessage :=
         if ($status = "failed") then
@@ -159,31 +174,54 @@ declare function schemaValidate:validate($source_url as xs:string){
             "QA status is unknown"
 
     return 
-    <div class="feedbacktext">
-        <span id="feedbackStatus" class="{$status => upper-case()}" style="display:none">{$feedbackMessage}</span>
-        <div class="iedreg table parent">
-            {schemaValidate:css()}
-            <div class="iedreg row">
-                <div class="iedreg col outer noborder">
-                    <!-- report table -->
-                    <div class="iedreg table">
-                        <div class="iedreg">
-                            <div class="iedreg inner msg m{$status}">{$feedbackMessage}</div>
-                            <div class="iedreg table inner">
-                                <div class="iedreg row">
-                                    {for $h in $hdrs
-                                    return
-                                        <div class="iedreg col inner th"><span class="iedreg break">{$h}</span></div>
-                                    }
+        if($results) then
+        <div class="feedbacktext">
+            <span id="feedbackStatus" class="{$status => upper-case()}" style="display:none">{$feedbackMessage}</span>
+            <div class="iedreg table parent">
+                {schemaValidate:css()}
+                <div class="iedreg row">
+                    <div class="iedreg col outer noborder">
+                        <!-- report table -->
+                        <div class="iedreg table">
+                            <div class="iedreg">
+                                <div class="iedreg inner msg m{$status}">{$feedbackMessage}</div>
+                                <div class="iedreg table inner">
+                                    <div class="iedreg row">
+                                        {for $h in $hdrs
+                                        return
+                                            <div class="iedreg col inner th"><span class="iedreg break">{$h}</span></div>
+                                        }
+                                    </div>
+                                    {$results}
                                 </div>
-                                {$results}
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+
+        else
+        
+        <div class="feedbacktext">
+            <span id="feedbackStatus" class="{$status => upper-case()}" style="display:none">{$feedbackMessage}</span>
+            <div class="iedreg table parent">
+                {schemaValidate:css()}
+                <div class="iedreg row">
+                    <div class="iedreg col outer noborder">
+                        <!-- report table -->
+                        <div class="iedreg table">
+                            <div class="iedreg">
+                                <div class="iedreg inner msg m{$status}">{$feedbackMessage}</div>
+                                <em>There are no .xml or .gml files in the envelope</em>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
 };
 
 schemaValidate:validate($source_url)
