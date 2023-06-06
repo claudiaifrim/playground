@@ -132,10 +132,6 @@ declare function schemaValidate:validate($source_url as xs:string){
 
             let $file_source_url := fn:concat('source_url=',$fileUrl)
             let $fileX := fn:replace($source_url,'source_url=.*',$file_source_url)
-            
-            (:
-            let $fileX := fn:replace($fileUrl,'http://', 'https://')
-            :)
 
             let $validationResult := validate:xsd-report($fileX)
             let $resultDistinct := 
@@ -160,8 +156,8 @@ declare function schemaValidate:validate($source_url as xs:string){
     let $status :=
             if ($all = "failed") then "failed"
             else if ($all = "blocker") then "blocker"
-            else if ($all = "pass") then "ok"
-            else "ok"
+            else if ($all = "pass" or empty($all)) then "ok"
+            else ""
 
     let $feedbackMessage :=
         if ($status = "failed") then
@@ -220,8 +216,6 @@ declare function schemaValidate:validate($source_url as xs:string){
                 </div>
             </div>
         </div>
-
-
 };
 
 schemaValidate:validate($source_url)
